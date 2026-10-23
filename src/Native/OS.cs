@@ -71,6 +71,12 @@ namespace SourceGit.Native
             private set;
         } = new Version(0, 0, 0);
 
+        // Repositories inside WSL use the git installed in their distro, not the Windows one.
+        public static Version GetGitVersion(string repo)
+        {
+            return WSL.TryParse(repo, out var distro, out _) ? WSL.GetGitVersion(distro) : GitVersion;
+        }
+
         public static Models.GitFlowVersion GitFlowVersion
         {
             get;
@@ -272,7 +278,8 @@ namespace SourceGit.Native
 
         public static void OpenTerminal(string workdir)
         {
-            if (string.IsNullOrEmpty(ShellOrTerminal))
+            // A WSL repository opens a shell of its distro, whatever terminal is configured for this PC.
+            if (string.IsNullOrEmpty(ShellOrTerminal) && !WSL.TryParse(workdir, out _, out _))
                 Models.Notification.Send(workdir, "Terminal is not specified! Please confirm that the correct shell/terminal has been configured.", true);
             else
                 _backend.OpenTerminal(workdir, ShellOrTerminalArgs);

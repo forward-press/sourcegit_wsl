@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
@@ -26,6 +27,7 @@ namespace SourceGit.ViewModels
                 _instance.PrepareShellOrTerminal();
                 _instance.PrepareExternalDiffMergeTool();
                 _instance.PrepareWorkspaces();
+                _instance.PrepareGitServers();
 
                 return _instance;
             }
@@ -468,6 +470,12 @@ namespace SourceGit.ViewModels
             set;
         } = [];
 
+        public AvaloniaList<Models.GitServer> GitServers
+        {
+            get;
+            set;
+        } = [];
+
         public double LastCheckUpdateTime
         {
             get => _lastCheckUpdateTime;
@@ -694,6 +702,40 @@ namespace SourceGit.ViewModels
                 if (string.IsNullOrEmpty(Native.OS.ExternalMergeArgs))
                     Native.OS.ExternalMergeArgs = merger.MergeCmd;
             }
+        }
+
+        // This PC first, then the configured servers.
+        public List<Models.GitServer> GetServerChoices()
+        {
+            var choices = new List<Models.GitServer>() { new() { Name = App.Text("Preferences.Servers.ThisPC") } };
+            foreach (var server in GitServers)
+            {
+                if (!string.IsNullOrEmpty(server.Distro))
+                    choices.Add(server);
+            }
+
+            return choices;
+        }
+
+        // Where to start browsing on the server, as a path the app can use (UNC for WSL).
+        public static string GetServerHome(Models.GitServer server)
+        {
+            var home = Native.WSL.GetHomeDirectory(server.Distro);
+            return Native.WSL.ToWindows(server.Distro, string.IsNullOrEmpty(home) ? "/" : home);
+        }
+
+        private void PrepareGitServers()
+        {
+            Native.WSL.CredentialHelperOverride = distro =>
+            {
+                foreach (var server in GitServers.ToArray())
+                {
+                    if (server.Distro.Equals(distro, StringComparison.OrdinalIgnoreCase))
+                        return server.CredentialHelper;
+                }
+
+                return string.Empty;
+            };
         }
 
         private void PrepareWorkspaces()
